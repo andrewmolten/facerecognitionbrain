@@ -9,12 +9,22 @@ import Register from "./components/Register/Register";
 import "./App.css";
 import "tachyons";
 import ParticlesBg from "particles-bg";
-import Clarifai from "clarifai";
 // import Axios from "axios";
 
-const app = new Clarifai.App({
-  apiKey: "2e7d6fe5e479491388b718a080d0ff8f",
-});
+const initialState = {
+  input: "",
+  imageUrl: "",
+  box: {},
+  route: "signin",
+  isSignedIn: false,
+  user: {
+    id: "",
+    name: "",
+    email: "",
+    entries: 0,
+    joined: "",
+  },
+};
 
 class App extends Component {
   constructor() {
@@ -25,8 +35,33 @@ class App extends Component {
       box: {},
       route: "signin",
       isSignedIn: false,
+      user: {
+        id: "",
+        name: "",
+        email: "",
+        entries: 0,
+        joined: "",
+      },
     };
   }
+
+  loadUser = (data) => {
+    this.setState({
+      user: {
+        id: data.id,
+        name: data.name,
+        email: data.email,
+        entries: data.entries,
+        joined: data.joined,
+      },
+    });
+  };
+
+  // componentDidMount() {
+  //   fetch("http://localhost:3000")
+  //     .then((response) => response.json())
+  //     .then(console.log);
+  // }
 
   calculateFaceLocation = (data) => {
     const clarifaiFace =
@@ -34,8 +69,6 @@ class App extends Component {
     const image = document.getElementById("inputimage");
     const width = Number(image.width);
     const height = Number(image.height);
-    console.log(width, height);
-    console.log(clarifaiFace);
     return {
       leftCol: clarifaiFace.left_col * width,
       topRow: clarifaiFace.top_row * height,
@@ -45,7 +78,6 @@ class App extends Component {
   };
 
   displayFaceBox = (box) => {
-    console.log(box);
     this.setState({ box: box });
   };
 
@@ -55,42 +87,36 @@ class App extends Component {
 
   onButtonSubmit = () => {
     this.setState({ imageUrl: this.state.input });
-    app.models
-      .predict(
-        {
-          id: "face-detection",
-          name: "face-detection",
-          version: "6dc7e46bc9124c5c8824be4822abe105",
-          type: "visual-detector",
-        },
-        this.state.input
-      )
+    fetch("http://localhost:3000/imageurl", {
+      method: "post",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        input: this.state.input,
+      }),
+    })
+      .then((response) => response.json())
       .then((response) => {
+        if (response) {
+          fetch("http://localhost:3000/image", {
+            method: "put",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: this.state.user.id,
+            }),
+          })
+            .then((response) => response.json())
+            .then((count) => {
+              this.setState(Object.assign(this.state.user, { entries: count }));
+            });
+        }
         this.displayFaceBox(this.calculateFaceLocation(response));
       })
       .catch((err) => console.log(err));
   };
-  // if (response) {
-  //   fetch("http://localhost:3000/image", {
-  //     method: "put",
-  //     headers: { "Content-Type": "application/json" },
-  //     body: JSON.stringify({
-  //       id: this.state.user.id,
-  //     }),
-  //   })
-  //     .then((response) => response.json())
 
-  //           .then((count) => {
-  //             this.setState(Object.assign(this.state.user, { entries: count }));
-  //           });
-  //       }
-  //       this.displayFaceBox(this.calculateFaceLocation(response));
-  //     })
-  //     .catch((err) => console.log(err));
-  // };
   onRouteChange = (route) => {
     if (route === "signout") {
-      this.setState({ isSignedIn: false });
+      this.setState(initialState);
     } else if (route === "home") {
       this.setState({ isSignedIn: true });
     }
@@ -101,9 +127,7 @@ class App extends Component {
     const { isSignedIn, imageUrl, route, box } = this.state;
     return (
       <div className="App">
-        <>
-          <ParticlesBg type="fountain" bg={true} />
-        </>
+        <>{/* <ParticlesBg type="cobweb" bg={true} /> */}</>
         <Navigation
           isSignedIn={isSignedIn}
           onRouteChange={this.onRouteChange}
@@ -111,7 +135,10 @@ class App extends Component {
         {route === "home" ? (
           <div>
             <Logo />
-            <Rank />
+            <Rank
+              name={this.state.user.name}
+              entries={this.state.user.entries}
+            />
             <ImageLinkForm
               onInputChange={this.onInputChange}
               onButtonSubmit={this.onButtonSubmit}
@@ -119,9 +146,12 @@ class App extends Component {
             <FaceRecognition box={box} imageUrl={imageUrl} />
           </div>
         ) : route === "signin" ? (
-          <Signin onRouteChange={this.onRouteChange} />
+          <Signin loadUser={this.loadUser} onRouteChange={this.onRouteChange} />
         ) : (
-          <Register onRouteChange={this.onRouteChange} />
+          <Register
+            loadUser={this.loadUser}
+            onRouteChange={this.onRouteChange}
+          />
         )}
       </div>
     );
